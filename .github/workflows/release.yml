@@ -1,0 +1,57 @@
+name: Create Release ZIP
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          version="$(sed -n 's/^## Version: *//p' Auctionator/Auctionator.toc | head -n 1)"
+          echo "value=${version:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Delete old tag
+        run: |
+          git push --delete origin latest || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Archive
+        run: |
+          rm -rf release
+          mkdir -p release
+
+          rsync -a \
+            --exclude '*.log' \
+            --exclude '__pycache__' \
+            Auctionator/ release/Auctionator/
+
+          cd release
+          zip -r ../Auctionator-Nozdor.zip .
+
+      - name: Update Latest Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Auctionator-Nozdor.zip
+          tag_name: latest
+          name: "Auctionator ${{ steps.version.outputs.value }} (Nozdor)"
+          body: |
+            ${{ github.event.head_commit.message }}
+
+            _Automatically updated: ${{ github.event.head_commit.timestamp }}_
+          prerelease: false
+          make_latest: "true"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
